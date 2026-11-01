@@ -19,19 +19,27 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.CardGiftcard
+import androidx.compose.material.icons.filled.CloudDone
+import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Login
 import androidx.compose.material.icons.filled.Payment
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Receipt
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -54,15 +62,22 @@ import com.example.ui.theme.EmeraldGreenDark
 import com.example.ui.theme.EmeraldGreenPrimary
 import com.example.ui.theme.GoldAccent
 import com.example.ui.theme.SoftGreenContainer
+import com.example.ui.theme.SpicyRed
+import com.google.firebase.auth.FirebaseUser
 
 @Composable
 fun ProfileScreen(
     currentLocation: String,
     onOpenLocationPicker: () -> Unit,
     onNavigateToOrders: () -> Unit,
+    favoritesCount: Int = 0,
+    onNavigateToFavorites: () -> Unit = {},
+    currentUser: FirebaseUser? = null,
+    isCloudSynced: Boolean = false,
+    onSignInClick: () -> Unit = {},
+    onSignOutClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    var notificationsEnabled by remember { mutableStateOf(true) }
     var useAmharic by remember { mutableStateOf(false) }
 
     LazyColumn(
@@ -71,7 +86,7 @@ fun ProfileScreen(
             .testTag("profile_screen"),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp)
     ) {
-        // User Profile Card
+        // User Profile Card / Authentication Card
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -79,52 +94,164 @@ fun ProfileScreen(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(18.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(64.dp)
-                            .clip(CircleShape)
-                            .background(EmeraldGreenPrimary),
-                        contentAlignment = Alignment.Center
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "ST",
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(16.dp))
-
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Selamawit Tadesse",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "+251 91 234 5678",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
+                        // User Avatar
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(GoldAccent)
-                                .padding(horizontal = 8.dp, vertical = 2.dp)
+                                .size(64.dp)
+                                .clip(CircleShape)
+                                .background(if (currentUser != null) EmeraldGreenPrimary else MaterialTheme.colorScheme.surfaceVariant),
+                            contentAlignment = Alignment.Center
                         ) {
+                            if (currentUser != null) {
+                                val initials = (currentUser.displayName ?: "User")
+                                    .split(" ")
+                                    .mapNotNull { it.firstOrNull()?.toString() }
+                                    .take(2)
+                                    .joinToString("")
+                                Text(
+                                    text = initials.ifBlank { "U" },
+                                    fontSize = 22.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Person,
+                                    contentDescription = "Guest",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(36.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(16.dp))
+
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Adera VIP Gourmet",
-                                fontSize = 11.sp,
+                                text = currentUser?.displayName ?: "Guest Foodie",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = currentUser?.email ?: "Sign in to backup orders & favorites",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (currentUser != null) {
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(GoldAccent)
+                                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            text = "Adera VIP Gourmet",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = DarkGrayText
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.CloudDone,
+                                            contentDescription = "Synced",
+                                            tint = EmeraldGreenPrimary,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(3.dp))
+                                        Text(
+                                            text = "Cloud Synced",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = EmeraldGreenPrimary
+                                        )
+                                    }
+                                } else {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.CloudOff,
+                                            contentDescription = "Local storage only",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = "Local Storage (Guest)",
+                                            fontSize = 11.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Primary Auth Action (Login or Logout)
+                    if (currentUser == null) {
+                        Button(
+                            onClick = onSignInClick,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(46.dp)
+                                .testTag("profile_signin_button"),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = EmeraldGreenPrimary,
+                                contentColor = Color.White
+                            )
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.White),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "G",
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = EmeraldGreenPrimary,
+                                    fontSize = 12.sp
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = "Sign in with Google",
                                 fontWeight = FontWeight.Bold,
-                                color = DarkGrayText
+                                fontSize = 15.sp
+                            )
+                        }
+                    } else {
+                        OutlinedButton(
+                            onClick = onSignOutClick,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(44.dp)
+                                .testTag("profile_signout_button"),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.Logout,
+                                contentDescription = "Sign Out",
+                                tint = SpicyRed,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Sign Out of Account",
+                                color = SpicyRed,
+                                fontWeight = FontWeight.SemiBold
                             )
                         }
                     }
@@ -171,7 +298,7 @@ fun ProfileScreen(
                                 color = EmeraldGreenDark
                             )
                             Text(
-                                text = "Earn points on every Ethiopian feast",
+                                text = if (currentUser != null) "Gold Member points active" else "Sign in to earn and redeem rewards",
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -179,7 +306,7 @@ fun ProfileScreen(
                     }
 
                     Text(
-                        text = "450 PTS",
+                        text = if (currentUser != null) "450 PTS" else "0 PTS",
                         fontWeight = FontWeight.ExtraBold,
                         color = EmeraldGreenPrimary,
                         fontSize = 16.sp
@@ -204,6 +331,15 @@ fun ProfileScreen(
                         title = "Delivery Address",
                         subtitle = currentLocation,
                         onClick = onOpenLocationPicker
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 8.dp))
+
+                    ProfileOptionItem(
+                        icon = Icons.Default.Favorite,
+                        title = "My Favorites",
+                        subtitle = if (favoritesCount > 0) "$favoritesCount saved dishes and restaurants" else "Save your favorite dishes & places",
+                        onClick = onNavigateToFavorites
                     )
 
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 8.dp))

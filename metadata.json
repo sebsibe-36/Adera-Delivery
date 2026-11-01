@@ -2,5 +2,7 @@
   "name": "Adera Delivery",
   "description": "A modern, responsive food delivery app for authentic Ethiopian cuisine with restaurant browsing, food menus, cart, and live order tracking.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

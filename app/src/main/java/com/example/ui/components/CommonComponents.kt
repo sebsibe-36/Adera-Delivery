@@ -141,7 +141,7 @@ fun AppHeader(
                 }
             }
 
-            // Brand Badge
+            // Clean Brand Badge on the right
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(20.dp))
@@ -173,6 +173,8 @@ fun FoodItemCard(
     food: FoodItem,
     onClick: () -> Unit,
     onAddToCart: () -> Unit,
+    isFavorite: Boolean = false,
+    onToggleFavorite: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -200,7 +202,7 @@ fun FoodItemCard(
                     modifier = Modifier.fillMaxWidth().height(140.dp)
                 )
 
-                // Dietary and Popular Badges
+                // Dietary and Popular Badges + Favorite Toggle
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -235,19 +237,40 @@ fun FoodItemCard(
                         Spacer(modifier = Modifier.width(1.dp))
                     }
 
-                    if (food.isPopular) {
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(GoldAccent)
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
-                        ) {
-                            Text(
-                                text = "Popular",
-                                color = DarkGrayText,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
-                            )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (food.isPopular) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(GoldAccent)
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Text(
+                                    text = "Popular",
+                                    color = DarkGrayText,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(6.dp))
+                        }
+
+                        if (onToggleFavorite != null) {
+                            IconButton(
+                                onClick = onToggleFavorite,
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.Black.copy(alpha = 0.55f))
+                                    .testTag("food_fav_btn_${food.id}")
+                            ) {
+                                Icon(
+                                    imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                    contentDescription = if (isFavorite) "Remove favorite" else "Save favorite",
+                                    tint = if (isFavorite) SpicyRed else Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -332,6 +355,8 @@ fun FoodItemCard(
 fun RestaurantCard(
     restaurant: Restaurant,
     onClick: () -> Unit,
+    isFavorite: Boolean = false,
+    onToggleFavorite: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -356,6 +381,27 @@ fun RestaurantCard(
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxWidth().height(150.dp)
                 )
+
+                // Favorite Heart Button on Top End
+                if (onToggleFavorite != null) {
+                    IconButton(
+                        onClick = onToggleFavorite,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(10.dp)
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(Color.Black.copy(alpha = 0.55f))
+                            .testTag("restaurant_fav_btn_${restaurant.id}")
+                    ) {
+                        Icon(
+                            imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                            contentDescription = if (isFavorite) "Remove restaurant from favorites" else "Add restaurant to favorites",
+                            tint = if (isFavorite) SpicyRed else Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
 
                 // Delivery Time pill
                 Box(

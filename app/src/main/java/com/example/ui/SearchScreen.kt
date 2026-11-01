@@ -71,6 +71,10 @@ fun SearchScreen(
     onOpenRestaurant: (Restaurant) -> Unit,
     onOpenFoodDetail: (FoodItem) -> Unit,
     onAddToCart: (FoodItem) -> Unit,
+    favoriteFoodIds: Set<String> = emptySet(),
+    favoriteRestaurantIds: Set<String> = emptySet(),
+    onToggleFoodFavorite: (String) -> Unit = {},
+    onToggleRestaurantFavorite: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var selectedTabIndex by remember { mutableIntStateOf(0) }
@@ -327,7 +331,9 @@ fun SearchScreen(
                     Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
                         RestaurantCard(
                             restaurant = rest,
-                            onClick = { onOpenRestaurant(rest) }
+                            onClick = { onOpenRestaurant(rest) },
+                            isFavorite = favoriteRestaurantIds.contains(rest.id),
+                            onToggleFavorite = { onToggleRestaurantFavorite(rest.id) }
                         )
                     }
                 }
@@ -349,7 +355,9 @@ fun SearchScreen(
                         FoodItemCard(
                             food = food,
                             onClick = { onOpenFoodDetail(food) },
-                            onAddToCart = { onAddToCart(food) }
+                            onAddToCart = { onAddToCart(food) },
+                            isFavorite = favoriteFoodIds.contains(food.id),
+                            onToggleFavorite = { onToggleFoodFavorite(food.id) }
                         )
                     }
                 }

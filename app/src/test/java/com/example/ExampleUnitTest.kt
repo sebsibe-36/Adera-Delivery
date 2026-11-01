@@ -5,6 +5,7 @@ import com.example.model.CartItem
 import com.example.model.Order
 import com.example.model.OrderStatus
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -48,5 +49,20 @@ class ExampleUnitTest {
         assertEquals(1, OrderStatus.PREPARING.stepIndex)
         assertEquals(2, OrderStatus.READY_FOR_DELIVERY.stepIndex)
         assertEquals(3, OrderStatus.DELIVERED.stepIndex)
+    }
+
+    @Test
+    fun favorites_toggleLogic() {
+        val favoritesSet = mutableSetOf("food_doro_wat", "food_shekla_tibs")
+        val testDish = "food_beyaynet"
+
+        // Add
+        assertFalse(favoritesSet.contains(testDish))
+        favoritesSet.add(testDish)
+        assertTrue(favoritesSet.contains(testDish))
+
+        // Remove
+        favoritesSet.remove(testDish)
+        assertFalse(favoritesSet.contains(testDish))
     }
 }

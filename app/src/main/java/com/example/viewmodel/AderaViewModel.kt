@@ -30,7 +30,8 @@ enum class ScreenTab {
 enum class NavigationScreen {
     MAIN_TABS,
     RESTAURANT_DETAIL,
-    CHECKOUT
+    CHECKOUT,
+    FAVORITES
 }
 
 class AderaViewModel(application: Application) : AndroidViewModel(application) {
@@ -42,6 +43,16 @@ class AderaViewModel(application: Application) : AndroidViewModel(application) {
     val activeOrderId: StateFlow<String?> = repository.activeOrderId
     val selectedLocation: StateFlow<String> = repository.selectedLocation
     val favorites: StateFlow<Set<String>> = repository.favorites
+    val favoriteFoodIds: StateFlow<Set<String>> = repository.favoriteFoodIds
+    val favoriteRestaurantIds: StateFlow<Set<String>> = repository.favoriteRestaurantIds
+
+    val favoriteFoods: StateFlow<List<FoodItem>> = favoriteFoodIds.combine(favoriteFoodIds) { ids, _ ->
+        SampleData.foodItems.filter { ids.contains(it.id) }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val favoriteRestaurants: StateFlow<List<Restaurant>> = favoriteRestaurantIds.combine(favoriteRestaurantIds) { ids, _ ->
+        SampleData.restaurants.filter { ids.contains(it.id) }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val cartCount: StateFlow<Int> = cartItems.combine(cartItems) { items, _ ->
         items.sumOf { it.quantity }
@@ -85,9 +96,36 @@ class AderaViewModel(application: Application) : AndroidViewModel(application) {
     private val _toastMessage = MutableStateFlow<String?>(null)
     val toastMessage: StateFlow<String?> = _toastMessage.asStateFlow()
 
+    // Auth and Cloud sync state
+    val currentUser = com.example.auth.AuthManager.currentUserFlow
+    val isCloudSynced: StateFlow<Boolean> = repository.isCloudSynced
+
+    private val _showLoginDialog = MutableStateFlow(false)
+    val showLoginDialog: StateFlow<Boolean> = _showLoginDialog.asStateFlow()
+
     // Location Picker Dialog
     private val _showLocationPicker = MutableStateFlow(false)
     val showLocationPicker: StateFlow<Boolean> = _showLocationPicker.asStateFlow()
+
+    fun openLoginDialog() {
+        _showLoginDialog.value = true
+    }
+
+    fun closeLoginDialog() {
+        _showLoginDialog.value = false
+    }
+
+    fun handleUserSignedIn(user: com.google.firebase.auth.FirebaseUser) {
+        repository.onUserSignedIn(user)
+        _showLoginDialog.value = false
+        val name = user.displayName ?: "Customer"
+        showToast("Signed in as $name! Cloud sync enabled ✨")
+    }
+
+    fun handleUserSignedOut() {
+        repository.onUserSignedOut()
+        showToast("Signed out. Switched to local guest mode.")
+    }
 
     fun selectTab(tab: ScreenTab) {
         _currentTab.value = tab
@@ -137,8 +175,34 @@ class AderaViewModel(application: Application) : AndroidViewModel(application) {
         _isSpicyOnlyFilter.value = !_isSpicyOnlyFilter.value
     }
 
+    fun navigateToFavorites() {
+        _currentScreen.value = NavigationScreen.FAVORITES
+    }
+
+    fun toggleFoodFavorite(foodId: String) {
+        val food = SampleData.foodItems.find { it.id == foodId }
+        val isFav = repository.toggleFoodFavorite(foodId)
+        val name = food?.name ?: "Dish"
+        if (isFav) {
+            showToast("Added $name to favorites ❤️")
+        } else {
+            showToast("Removed $name from favorites")
+        }
+    }
+
+    fun toggleRestaurantFavorite(restaurantId: String) {
+        val restaurant = SampleData.restaurants.find { it.id == restaurantId }
+        val isFav = repository.toggleRestaurantFavorite(restaurantId)
+        val name = restaurant?.name ?: "Restaurant"
+        if (isFav) {
+            showToast("Saved $name to favorites ❤️")
+        } else {
+            showToast("Removed $name from favorites")
+        }
+    }
+
     fun toggleFavorite(foodId: String) {
-        repository.toggleFavorite(foodId)
+        toggleFoodFavorite(foodId)
     }
 
     fun openLocationPicker() {

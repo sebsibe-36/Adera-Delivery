@@ -58,12 +58,20 @@ import com.example.ui.theme.EmeraldGreenPrimary
 import com.example.ui.theme.GoldDark
 import com.example.ui.theme.SoftGreenContainer
 
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
+import com.example.ui.theme.SpicyRed
+
 @Composable
 fun RestaurantScreen(
     restaurant: Restaurant,
     onBack: () -> Unit,
     onOpenFoodDetail: (FoodItem) -> Unit,
     onAddToCart: (FoodItem) -> Unit,
+    isFavoriteRestaurant: Boolean = false,
+    onToggleRestaurantFavorite: () -> Unit = {},
+    favoriteFoodIds: Set<String> = emptySet(),
+    onToggleFoodFavorite: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     BackHandler { onBack() }
@@ -117,6 +125,24 @@ fun RestaurantScreen(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Back",
                         tint = Color.White
+                    )
+                }
+
+                // Favorite Heart Button
+                IconButton(
+                    onClick = onToggleRestaurantFavorite,
+                    modifier = Modifier
+                        .padding(16.dp)
+                        .align(Alignment.TopEnd)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.6f))
+                        .size(42.dp)
+                        .testTag("restaurant_cover_fav_btn")
+                ) {
+                    Icon(
+                        imageVector = if (isFavoriteRestaurant) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = if (isFavoriteRestaurant) "Remove favorite" else "Save favorite",
+                        tint = if (isFavoriteRestaurant) SpicyRed else Color.White
                     )
                 }
             }
@@ -270,7 +296,9 @@ fun RestaurantScreen(
                 FoodItemCard(
                     food = food,
                     onClick = { onOpenFoodDetail(food) },
-                    onAddToCart = { onAddToCart(food) }
+                    onAddToCart = { onAddToCart(food) },
+                    isFavorite = favoriteFoodIds.contains(food.id),
+                    onToggleFavorite = { onToggleFoodFavorite(food.id) }
                 )
             }
         }

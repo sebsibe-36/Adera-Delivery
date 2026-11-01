@@ -48,6 +48,8 @@ import com.example.ui.components.LocationSelectorModal
 import com.example.ui.theme.EmeraldGreenPrimary
 import com.example.ui.theme.GoldAccent
 import com.example.ui.theme.SoftGreenContainer
+import com.example.auth.AuthManager
+import com.example.ui.components.LoginDialog
 import com.example.viewmodel.AderaViewModel
 import com.example.viewmodel.NavigationScreen
 import com.example.viewmodel.ScreenTab
@@ -71,10 +73,21 @@ fun AderaApp(
     val showLocationPicker by viewModel.showLocationPicker.collectAsStateWithLifecycle()
     val toastMessage by viewModel.toastMessage.collectAsStateWithLifecycle()
 
+    val favoriteFoodIds by viewModel.favoriteFoodIds.collectAsStateWithLifecycle()
+    val favoriteRestaurantIds by viewModel.favoriteRestaurantIds.collectAsStateWithLifecycle()
+    val favoriteFoods by viewModel.favoriteFoods.collectAsStateWithLifecycle()
+    val favoriteRestaurants by viewModel.favoriteRestaurants.collectAsStateWithLifecycle()
+
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val selectedCategoryFilter by viewModel.selectedCategoryFilter.collectAsStateWithLifecycle()
     val isVegOnly by viewModel.isVegOnlyFilter.collectAsStateWithLifecycle()
     val isSpicyOnly by viewModel.isSpicyOnlyFilter.collectAsStateWithLifecycle()
+    val currentUser by viewModel.currentUser.collectAsStateWithLifecycle()
+    val isCloudSynced by viewModel.isCloudSynced.collectAsStateWithLifecycle()
+    val showLoginDialog by viewModel.showLoginDialog.collectAsStateWithLifecycle()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val credentialManager = remember { androidx.credentials.CredentialManager.create(context) }
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -231,13 +244,34 @@ fun AderaApp(
                 .padding(innerPadding)
         ) {
             when (currentScreen) {
+                NavigationScreen.FAVORITES -> {
+                    FavoritesScreen(
+                        favoriteFoods = favoriteFoods,
+                        favoriteRestaurants = favoriteRestaurants,
+                        onBack = { viewModel.navigateBack() },
+                        onOpenFoodDetail = { viewModel.openFoodDetail(it) },
+                        onAddToCart = { viewModel.addToCart(it) },
+                        onOpenRestaurant = { viewModel.openRestaurant(it) },
+                        onToggleFoodFavorite = { viewModel.toggleFoodFavorite(it) },
+                        onToggleRestaurantFavorite = { viewModel.toggleRestaurantFavorite(it) },
+                        onExploreFoods = {
+                            viewModel.navigateBack()
+                            viewModel.selectTab(ScreenTab.HOME)
+                        }
+                    )
+                }
+
                 NavigationScreen.RESTAURANT_DETAIL -> {
                     selectedRestaurant?.let { rest ->
                         RestaurantScreen(
                             restaurant = rest,
                             onBack = { viewModel.navigateBack() },
                             onOpenFoodDetail = { viewModel.openFoodDetail(it) },
-                            onAddToCart = { viewModel.addToCart(it) }
+                            onAddToCart = { viewModel.addToCart(it) },
+                            isFavoriteRestaurant = favoriteRestaurantIds.contains(rest.id),
+                            onToggleRestaurantFavorite = { viewModel.toggleRestaurantFavorite(rest.id) },
+                            favoriteFoodIds = favoriteFoodIds,
+                            onToggleFoodFavorite = { viewModel.toggleFoodFavorite(it) }
                         )
                     }
                 }
@@ -264,7 +298,11 @@ fun AderaApp(
                                 onOpenRestaurant = { viewModel.openRestaurant(it) },
                                 onOpenFoodDetail = { viewModel.openFoodDetail(it) },
                                 onAddToCart = { viewModel.addToCart(it) },
-                                onNavigateToSearch = { viewModel.selectTab(ScreenTab.SEARCH) }
+                                onNavigateToSearch = { viewModel.selectTab(ScreenTab.SEARCH) },
+                                favoriteFoodIds = favoriteFoodIds,
+                                favoriteRestaurantIds = favoriteRestaurantIds,
+                                onToggleFoodFavorite = { viewModel.toggleFoodFavorite(it) },
+                                onToggleRestaurantFavorite = { viewModel.toggleRestaurantFavorite(it) }
                             )
                         }
 
@@ -280,7 +318,11 @@ fun AderaApp(
                                 onToggleSpicy = { viewModel.toggleSpicyFilter() },
                                 onOpenRestaurant = { viewModel.openRestaurant(it) },
                                 onOpenFoodDetail = { viewModel.openFoodDetail(it) },
-                                onAddToCart = { viewModel.addToCart(it) }
+                                onAddToCart = { viewModel.addToCart(it) },
+                                favoriteFoodIds = favoriteFoodIds,
+                                favoriteRestaurantIds = favoriteRestaurantIds,
+                                onToggleFoodFavorite = { viewModel.toggleFoodFavorite(it) },
+                                onToggleRestaurantFavorite = { viewModel.toggleRestaurantFavorite(it) }
                             )
                         }
 
@@ -315,7 +357,20 @@ fun AderaApp(
                             ProfileScreen(
                                 currentLocation = selectedLocation,
                                 onOpenLocationPicker = { viewModel.openLocationPicker() },
-                                onNavigateToOrders = { viewModel.selectTab(ScreenTab.ORDERS) }
+                                onNavigateToOrders = { viewModel.selectTab(ScreenTab.ORDERS) },
+                                favoritesCount = favoriteFoodIds.size + favoriteRestaurantIds.size,
+                                onNavigateToFavorites = { viewModel.navigateToFavorites() },
+                                currentUser = currentUser,
+                                isCloudSynced = isCloudSynced,
+                                onSignInClick = { viewModel.openLoginDialog() },
+                                onSignOutClick = {
+                                    AuthManager.signOut(
+                                        context = context,
+                                        credentialManager = credentialManager,
+                                        onSignOutComplete = { viewModel.handleUserSignedOut() },
+                                        scope = scope
+                                    )
+                                }
                             )
                         }
                     }
@@ -329,7 +384,9 @@ fun AderaApp(
                     onDismiss = { viewModel.closeFoodDetail() },
                     onAddToCart = { item, qty, spice, notes ->
                         viewModel.addToCart(item, qty, spice, notes)
-                    }
+                    },
+                    isFavorite = favoriteFoodIds.contains(food.id),
+                    onToggleFavorite = { viewModel.toggleFoodFavorite(food.id) }
                 )
             }
 
@@ -340,6 +397,14 @@ fun AderaApp(
                     currentLocation = selectedLocation,
                     onSelectLocation = { viewModel.selectLocation(it) },
                     onDismiss = { viewModel.closeLocationPicker() }
+                )
+            }
+
+            // Google Login Dialog
+            if (showLoginDialog) {
+                LoginDialog(
+                    onDismiss = { viewModel.closeLoginDialog() },
+                    onAuthSuccess = { user -> viewModel.handleUserSignedIn(user) }
                 )
             }
         }

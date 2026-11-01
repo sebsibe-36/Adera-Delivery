@@ -69,6 +69,10 @@ fun HomeScreen(
     onOpenFoodDetail: (FoodItem) -> Unit,
     onAddToCart: (FoodItem) -> Unit,
     onNavigateToSearch: () -> Unit,
+    favoriteFoodIds: Set<String> = emptySet(),
+    favoriteRestaurantIds: Set<String> = emptySet(),
+    onToggleFoodFavorite: (String) -> Unit = {},
+    onToggleRestaurantFavorite: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val filteredFoods = if (selectedCategoryId == "cat_all") {
@@ -276,6 +280,8 @@ fun HomeScreen(
                     RestaurantCard(
                         restaurant = rest,
                         onClick = { onOpenRestaurant(rest) },
+                        isFavorite = favoriteRestaurantIds.contains(rest.id),
+                        onToggleFavorite = { onToggleRestaurantFavorite(rest.id) },
                         modifier = Modifier.width(260.dp)
                     )
                 }
@@ -313,7 +319,9 @@ fun HomeScreen(
                 FoodItemCard(
                     food = food,
                     onClick = { onOpenFoodDetail(food) },
-                    onAddToCart = { onAddToCart(food) }
+                    onAddToCart = { onAddToCart(food) },
+                    isFavorite = favoriteFoodIds.contains(food.id),
+                    onToggleFavorite = { onToggleFoodFavorite(food.id) }
                 )
             }
         }

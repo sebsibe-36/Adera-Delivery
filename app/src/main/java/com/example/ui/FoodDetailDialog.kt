@@ -64,12 +64,17 @@ import com.example.ui.theme.SoftGreenContainer
 import com.example.ui.theme.SpicyRed
 import com.example.ui.theme.VegetarianGreen
 
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FoodDetailModal(
     food: FoodItem,
     onDismiss: () -> Unit,
     onAddToCart: (FoodItem, Int, String, String) -> Unit,
+    isFavorite: Boolean = false,
+    onToggleFavorite: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -115,6 +120,27 @@ fun FoodDetailModal(
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxWidth().height(240.dp)
                 )
+
+                // Favorite Toggle Button
+                if (onToggleFavorite != null) {
+                    IconButton(
+                        onClick = onToggleFavorite,
+                        modifier = Modifier
+                            .padding(16.dp)
+                            .align(Alignment.TopStart)
+                            .clip(CircleShape)
+                            .background(Color.Black.copy(alpha = 0.6f))
+                            .size(36.dp)
+                            .testTag("food_detail_fav_btn")
+                    ) {
+                        Icon(
+                            imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                            contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
+                            tint = if (isFavorite) SpicyRed else Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
 
                 // Close Button
                 IconButton(

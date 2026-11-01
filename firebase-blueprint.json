@@ -1,0 +1,157 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile metadata synchronized upon Google Sign-In",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Unique Google user ID"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "User display name"
+        },
+        "email": {
+          "type": "string",
+          "description": "User email address"
+        },
+        "photoUrl": {
+          "type": "string",
+          "description": "User profile avatar photo URL"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when the user document was created. Clients must submit FieldValue.serverTimestamp()."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when the user document was last updated. Clients must submit FieldValue.serverTimestamp()."
+        }
+      },
+      "required": ["userId", "displayName", "createdAt"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "A food delivery order placed by the user",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Order unique identifier"
+        },
+        "orderNumber": {
+          "type": "string",
+          "description": "Human-readable order tracking number (e.g., AD-1234)"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Owner user ID"
+        },
+        "items": {
+          "type": "array",
+          "description": "List of food items in the order"
+        },
+        "subtotal": {
+          "type": "number",
+          "description": "Subtotal in ETB"
+        },
+        "deliveryFee": {
+          "type": "number",
+          "description": "Delivery fee in ETB"
+        },
+        "total": {
+          "type": "number",
+          "description": "Total order price in ETB"
+        },
+        "status": {
+          "type": "string",
+          "description": "Current delivery status",
+          "enum": ["RECEIVED", "PREPARING", "READY_FOR_DELIVERY", "DELIVERED"]
+        },
+        "customerName": {
+          "type": "string",
+          "description": "Customer name"
+        },
+        "customerPhone": {
+          "type": "string",
+          "description": "Customer contact phone"
+        },
+        "deliveryAddress": {
+          "type": "string",
+          "description": "Delivery destination address"
+        },
+        "deliveryNotes": {
+          "type": "string",
+          "description": "Special delivery instructions"
+        },
+        "paymentMethod": {
+          "type": "string",
+          "description": "Payment method used"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Order creation timestamp. Clients must submit FieldValue.serverTimestamp()."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last update timestamp. Clients must submit FieldValue.serverTimestamp()."
+        }
+      },
+      "required": ["id", "orderNumber", "userId", "items", "subtotal", "total", "status", "createdAt"]
+    },
+    "Favorite": {
+      "title": "Favorite",
+      "description": "Favorite dish or restaurant item saved by the user",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique favorite ID"
+        },
+        "itemId": {
+          "type": "string",
+          "description": "Food ID or Restaurant ID"
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of the favorite food or restaurant"
+        },
+        "type": {
+          "type": "string",
+          "description": "Type of favorite: 'food' or 'restaurant'",
+          "enum": ["food", "restaurant"]
+        },
+        "userId": {
+          "type": "string",
+          "description": "Owner user ID"
+        },
+        "addedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation timestamp. Clients must submit FieldValue.serverTimestamp()."
+        }
+      },
+      "required": ["id", "itemId", "type", "userId", "addedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Stores user profiles with ownership restricted to the authenticated user"
+    },
+    "/users/{userId}/orders/{orderId}": {
+      "schema": "Order",
+      "description": "User's order history and active delivery tracking"
+    },
+    "/users/{userId}/favorites/{favoriteId}": {
+      "schema": "Favorite",
+      "description": "User's favorite dishes and restaurants"
+    }
+  }
+}

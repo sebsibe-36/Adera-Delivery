@@ -2,25 +2,50 @@ package com.example.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.util.Log
+import com.example.R
 import com.example.model.CartItem
 import com.example.model.FoodItem
 import com.example.model.Order
 import com.example.model.OrderStatus
-import com.example.model.Restaurant
+import com.google.firebase.Firebase
+import com.google.firebase.auth.FirebaseUser
+import com.google.firebase.auth.auth
+import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.firestore.SetOptions
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import java.util.UUID
 
-class AderaRepository(private val context: Context) {
+class AderaRepository(
+    private val context: Context,
+    private val firestoreInstance: FirebaseFirestore? = null
+) {
+    private val tag = "AderaRepository"
+    private val repositoryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val prefs: SharedPreferences =
         context.getSharedPreferences("adera_delivery_prefs", Context.MODE_PRIVATE)
+
+    // Resolve named database explicitly from firebase_applet_config.xml
+    private val db: FirebaseFirestore by lazy {
+        firestoreInstance ?: try {
+            val dbId = context.getString(R.string.firestore_database_id)
+            FirebaseFirestore.getInstance(dbId)
+        } catch (e: Exception) {
+            Log.e(tag, "Failed to initialize Firestore with named database ID", e)
+            FirebaseFirestore.getInstance()
+        }
+    }
 
     private val _cartItems = MutableStateFlow<List<CartItem>>(emptyList())
     val cartItems: StateFlow<List<CartItem>> = _cartItems.asStateFlow()
@@ -34,11 +59,27 @@ class AderaRepository(private val context: Context) {
     private val _selectedLocation = MutableStateFlow(SampleData.deliveryLocations[0])
     val selectedLocation: StateFlow<String> = _selectedLocation.asStateFlow()
 
-    private val _favorites = MutableStateFlow<Set<String>>(setOf("food_doro_wat", "food_shekla_tibs"))
-    val favorites: StateFlow<Set<String>> = _favorites.asStateFlow()
+    private val _favoriteFoodIds = MutableStateFlow<Set<String>>(setOf("food_doro_wat", "food_shekla_tibs"))
+    val favoriteFoodIds: StateFlow<Set<String>> = _favoriteFoodIds.asStateFlow()
+    val favorites: StateFlow<Set<String>> = _favoriteFoodIds.asStateFlow()
+
+    private val _favoriteRestaurantIds = MutableStateFlow<Set<String>>(setOf("rest_1", "rest_2"))
+    val favoriteRestaurantIds: StateFlow<Set<String>> = _favoriteRestaurantIds.asStateFlow()
+
+    private val _isCloudSynced = MutableStateFlow(false)
+    val isCloudSynced: StateFlow<Boolean> = _isCloudSynced.asStateFlow()
+
+    private var ordersListener: ListenerRegistration? = null
+    private var favoritesListener: ListenerRegistration? = null
 
     init {
         loadSavedData()
+        // Check current authenticated user and attach listeners if present
+        val user = Firebase.auth.currentUser
+        if (user != null) {
+            attachUserListeners(user.uid)
+            syncUserProfile(user)
+        }
     }
 
     private fun loadSavedData() {
@@ -72,7 +113,6 @@ class AderaRepository(private val context: Context) {
                     val paymentMethod = obj.optString("paymentMethod", "Cash on Delivery")
                     val notes = obj.optString("deliveryNotes", "")
 
-                    // parse items
                     val itemsArr = obj.optJSONArray("items") ?: JSONArray()
                     val cartList = mutableListOf<CartItem>()
                     for (j in 0 until itemsArr.length()) {
@@ -111,7 +151,6 @@ class AderaRepository(private val context: Context) {
             saveOrders(_orders.value)
         }
 
-        // Set active order to the first non-delivered order, or the latest
         val ongoing = _orders.value.find { it.status != OrderStatus.DELIVERED }
         _activeOrderId.value = ongoing?.id ?: _orders.value.firstOrNull()?.id
 
@@ -137,6 +176,203 @@ class AderaRepository(private val context: Context) {
                 _cartItems.value = emptyList()
             }
         }
+
+        // Load saved favorite food items
+        val savedFavFoods = prefs.getStringSet("saved_favorite_foods", null)
+        if (savedFavFoods != null) {
+            _favoriteFoodIds.value = savedFavFoods
+        }
+
+        // Load saved favorite restaurants
+        val savedFavRestaurants = prefs.getStringSet("saved_favorite_restaurants", null)
+        if (savedFavRestaurants != null) {
+            _favoriteRestaurantIds.value = savedFavRestaurants
+        }
+    }
+
+    fun onUserSignedIn(user: FirebaseUser) {
+        attachUserListeners(user.uid)
+        syncUserProfile(user)
+        syncLocalDataToFirestore(user.uid)
+        _isCloudSynced.value = true
+    }
+
+    fun onUserSignedOut() {
+        ordersListener?.remove()
+        ordersListener = null
+        favoritesListener?.remove()
+        favoritesListener = null
+        _isCloudSynced.value = false
+    }
+
+    private fun syncUserProfile(user: FirebaseUser) {
+        val userRef = db.collection("users").document(user.uid)
+        val profileData = mutableMapOf<String, Any>(
+            "userId" to user.uid,
+            "displayName" to (user.displayName ?: "Adera Customer"),
+            "email" to (user.email ?: ""),
+            "updatedAt" to FieldValue.serverTimestamp()
+        )
+        user.photoUrl?.let {
+            profileData["photoUrl"] = it.toString()
+        }
+
+        // Check if document exists first to maintain createdAt
+        userRef.get().addOnSuccessListener { snapshot ->
+            if (!snapshot.exists()) {
+                profileData["createdAt"] = FieldValue.serverTimestamp()
+                userRef.set(profileData)
+                    .addOnFailureListener { e -> Log.e(tag, "Failed to create user profile in Firestore", e) }
+            } else {
+                userRef.set(profileData, SetOptions.merge())
+                    .addOnFailureListener { e -> Log.e(tag, "Failed to update user profile in Firestore", e) }
+            }
+        }.addOnFailureListener { e ->
+            Log.e(tag, "Failed to fetch user document", e)
+        }
+    }
+
+    private fun attachUserListeners(uid: String) {
+        ordersListener?.remove()
+        favoritesListener?.remove()
+
+        // 1. Listen to /users/{uid}/orders
+        ordersListener = db.collection("users").document(uid).collection("orders")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.e(tag, "Error listening to orders", error)
+                    return@addSnapshotListener
+                }
+                if (snapshot != null && !snapshot.isEmpty) {
+                    val firestoreOrders = snapshot.documents.mapNotNull { doc ->
+                        try {
+                            val id = doc.getString("id") ?: doc.id
+                            val orderNumber = doc.getString("orderNumber") ?: "AD-0000"
+                            val subtotal = doc.getDouble("subtotal") ?: 0.0
+                            val deliveryFee = doc.getDouble("deliveryFee") ?: 50.0
+                            val total = doc.getDouble("total") ?: (subtotal + deliveryFee)
+                            val statusStr = doc.getString("status") ?: OrderStatus.RECEIVED.name
+                            val status = try { OrderStatus.valueOf(statusStr) } catch (_: Exception) { OrderStatus.RECEIVED }
+                            val customerName = doc.getString("customerName") ?: ""
+                            val customerPhone = doc.getString("customerPhone") ?: ""
+                            val address = doc.getString("deliveryAddress") ?: ""
+                            val notes = doc.getString("deliveryNotes") ?: ""
+                            val payment = doc.getString("paymentMethod") ?: "Cash on Delivery"
+                            val arrival = doc.getString("estimatedArrival") ?: "25-35 mins"
+                            val driver = doc.getString("driverName") ?: "Abebe Kebede"
+                            val driverPhone = doc.getString("driverPhone") ?: "+251 91 123 4567"
+
+                            val itemsRaw = doc.get("items") as? List<Map<String, Any>> ?: emptyList()
+                            val parsedItems = itemsRaw.map { itemMap ->
+                                val foodId = itemMap["foodId"] as? String ?: ""
+                                val qty = (itemMap["quantity"] as? Number)?.toInt() ?: 1
+                                val spice = itemMap["spiceLevel"] as? String ?: "Medium"
+                                val food = SampleData.foodItems.find { it.id == foodId }
+                                    ?: SampleData.foodItems.first()
+                                CartItem(foodItem = food, quantity = qty, spiceLevel = spice)
+                            }
+
+                            Order(
+                                id = id,
+                                orderNumber = orderNumber,
+                                items = parsedItems,
+                                subtotal = subtotal,
+                                deliveryFee = deliveryFee,
+                                total = total,
+                                status = status,
+                                customerName = customerName,
+                                customerPhone = customerPhone,
+                                deliveryAddress = address,
+                                deliveryNotes = notes,
+                                paymentMethod = payment,
+                                estimatedArrival = arrival,
+                                driverName = driver,
+                                driverPhone = driverPhone
+                            )
+                        } catch (e: Exception) {
+                            Log.e(tag, "Failed to parse order from document ${doc.id}", e)
+                            null
+                        }
+                    }
+
+                    if (firestoreOrders.isNotEmpty()) {
+                        _orders.value = firestoreOrders
+                        saveOrders(firestoreOrders)
+                    }
+                }
+            }
+
+        // 2. Listen to /users/{uid}/favorites
+        favoritesListener = db.collection("users").document(uid).collection("favorites")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.e(tag, "Error listening to favorites", error)
+                    return@addSnapshotListener
+                }
+                if (snapshot != null) {
+                    val foodFavs = mutableSetOf<String>()
+                    val restFavs = mutableSetOf<String>()
+                    for (doc in snapshot.documents) {
+                        val itemId = doc.getString("itemId") ?: continue
+                        val type = doc.getString("type") ?: "food"
+                        if (type == "food") {
+                            foodFavs.add(itemId)
+                        } else if (type == "restaurant") {
+                            restFavs.add(itemId)
+                        }
+                    }
+                    if (foodFavs.isNotEmpty() || restFavs.isNotEmpty()) {
+                        _favoriteFoodIds.value = foodFavs
+                        _favoriteRestaurantIds.value = restFavs
+                        prefs.edit()
+                            .putStringSet("saved_favorite_foods", foodFavs)
+                            .putStringSet("saved_favorite_restaurants", restFavs)
+                            .apply()
+                    }
+                }
+            }
+    }
+
+    private fun syncLocalDataToFirestore(uid: String) {
+        repositoryScope.launch {
+            try {
+                // Sync favorite foods
+                _favoriteFoodIds.value.forEach { foodId ->
+                    val favDoc = db.collection("users").document(uid).collection("favorites").document("fav_f_$foodId")
+                    val food = SampleData.foodItems.find { it.id == foodId }
+                    favDoc.set(
+                        mapOf(
+                            "id" to "fav_f_$foodId",
+                            "itemId" to foodId,
+                            "name" to (food?.name ?: "Ethiopian Dish"),
+                            "type" to "food",
+                            "userId" to uid,
+                            "addedAt" to FieldValue.serverTimestamp()
+                        ),
+                        SetOptions.merge()
+                    )
+                }
+
+                // Sync favorite restaurants
+                _favoriteRestaurantIds.value.forEach { restId ->
+                    val favDoc = db.collection("users").document(uid).collection("favorites").document("fav_r_$restId")
+                    val rest = SampleData.restaurants.find { it.id == restId }
+                    favDoc.set(
+                        mapOf(
+                            "id" to "fav_r_$restId",
+                            "itemId" to restId,
+                            "name" to (rest?.name ?: "Ethiopian Restaurant"),
+                            "type" to "restaurant",
+                            "userId" to uid,
+                            "addedAt" to FieldValue.serverTimestamp()
+                        ),
+                        SetOptions.merge()
+                    )
+                }
+            } catch (e: Exception) {
+                Log.e(tag, "Error syncing local favorites to Firestore", e)
+            }
+        }
     }
 
     fun setLocation(location: String) {
@@ -144,14 +380,90 @@ class AderaRepository(private val context: Context) {
         prefs.edit().putString("saved_location", location).apply()
     }
 
-    fun toggleFavorite(foodId: String) {
-        val current = _favorites.value.toMutableSet()
-        if (current.contains(foodId)) {
+    fun toggleFoodFavorite(foodId: String): Boolean {
+        val current = _favoriteFoodIds.value.toMutableSet()
+        val isNowFavorite = if (current.contains(foodId)) {
             current.remove(foodId)
+            false
         } else {
             current.add(foodId)
+            true
         }
-        _favorites.value = current
+        _favoriteFoodIds.value = current
+        prefs.edit().putStringSet("saved_favorite_foods", current).apply()
+
+        // Sync with Firestore if authenticated
+        val uid = Firebase.auth.currentUser?.uid
+        if (uid != null) {
+            val docRef = db.collection("users").document(uid).collection("favorites").document("fav_f_$foodId")
+            if (isNowFavorite) {
+                val food = SampleData.foodItems.find { it.id == foodId }
+                docRef.set(
+                    mapOf(
+                        "id" to "fav_f_$foodId",
+                        "itemId" to foodId,
+                        "name" to (food?.name ?: "Dish"),
+                        "type" to "food",
+                        "userId" to uid,
+                        "addedAt" to FieldValue.serverTimestamp()
+                    )
+                ).addOnFailureListener { e -> Log.e(tag, "Failed to save favorite food to Firestore", e) }
+            } else {
+                docRef.delete()
+                    .addOnFailureListener { e -> Log.e(tag, "Failed to delete favorite food from Firestore", e) }
+            }
+        }
+
+        return isNowFavorite
+    }
+
+    fun toggleRestaurantFavorite(restaurantId: String): Boolean {
+        val current = _favoriteRestaurantIds.value.toMutableSet()
+        val isNowFavorite = if (current.contains(restaurantId)) {
+            current.remove(restaurantId)
+            false
+        } else {
+            current.add(restaurantId)
+            true
+        }
+        _favoriteRestaurantIds.value = current
+        prefs.edit().putStringSet("saved_favorite_restaurants", current).apply()
+
+        // Sync with Firestore if authenticated
+        val uid = Firebase.auth.currentUser?.uid
+        if (uid != null) {
+            val docRef = db.collection("users").document(uid).collection("favorites").document("fav_r_$restaurantId")
+            if (isNowFavorite) {
+                val rest = SampleData.restaurants.find { it.id == restaurantId }
+                docRef.set(
+                    mapOf(
+                        "id" to "fav_r_$restaurantId",
+                        "itemId" to restaurantId,
+                        "name" to (rest?.name ?: "Restaurant"),
+                        "type" to "restaurant",
+                        "userId" to uid,
+                        "addedAt" to FieldValue.serverTimestamp()
+                    )
+                ).addOnFailureListener { e -> Log.e(tag, "Failed to save favorite restaurant to Firestore", e) }
+            } else {
+                docRef.delete()
+                    .addOnFailureListener { e -> Log.e(tag, "Failed to delete favorite restaurant from Firestore", e) }
+            }
+        }
+
+        return isNowFavorite
+    }
+
+    fun toggleFavorite(foodId: String) {
+        toggleFoodFavorite(foodId)
+    }
+
+    fun isFoodFavorite(foodId: String): Boolean {
+        return _favoriteFoodIds.value.contains(foodId)
+    }
+
+    fun isRestaurantFavorite(restaurantId: String): Boolean {
+        return _favoriteRestaurantIds.value.contains(restaurantId)
     }
 
     fun addToCart(foodItem: FoodItem, quantity: Int = 1, spiceLevel: String = "Medium", instructions: String = "") {
@@ -259,7 +571,7 @@ class AderaRepository(private val context: Context) {
         val total = subtotal + deliveryFee
         val randomNum = (1000..9999).random()
         val orderNumber = "AD-$randomNum"
-        val orderId = "ord_${UUID.randomUUID().toString().take(8)}"
+        val orderId = "ord_${UUID.randomUUID().toString().replace("-", "").take(8)}"
 
         val newOrder = Order(
             id = orderId,
@@ -284,6 +596,43 @@ class AderaRepository(private val context: Context) {
         _activeOrderId.value = orderId
         saveOrders(updated)
         clearCart()
+
+        // Sync to Firestore if user is authenticated
+        val user = Firebase.auth.currentUser
+        if (user != null) {
+            val orderDocRef = db.collection("users").document(user.uid).collection("orders").document(orderId)
+            val itemsData = items.map {
+                mapOf(
+                    "foodId" to it.foodItem.id,
+                    "foodName" to it.foodItem.name,
+                    "quantity" to it.quantity,
+                    "price" to it.foodItem.price,
+                    "spiceLevel" to it.spiceLevel
+                )
+            }
+            val payload = mapOf(
+                "id" to orderId,
+                "orderNumber" to orderNumber,
+                "userId" to user.uid,
+                "items" to itemsData,
+                "subtotal" to subtotal,
+                "deliveryFee" to deliveryFee,
+                "total" to total,
+                "status" to OrderStatus.RECEIVED.name,
+                "customerName" to newOrder.customerName,
+                "customerPhone" to newOrder.customerPhone,
+                "deliveryAddress" to newOrder.deliveryAddress,
+                "deliveryNotes" to newOrder.deliveryNotes,
+                "paymentMethod" to newOrder.paymentMethod,
+                "estimatedArrival" to newOrder.estimatedArrival,
+                "driverName" to newOrder.driverName,
+                "driverPhone" to newOrder.driverPhone,
+                "createdAt" to FieldValue.serverTimestamp()
+            )
+            orderDocRef.set(payload)
+                .addOnFailureListener { e -> Log.e(tag, "Failed to persist order to Firestore", e) }
+        }
+
         return newOrder
     }
 
@@ -305,6 +654,22 @@ class AderaRepository(private val context: Context) {
         }
         _orders.value = list
         saveOrders(list)
+
+        // If authenticated, update status in Firestore
+        val user = Firebase.auth.currentUser
+        if (user != null) {
+            val updatedOrder = list.find { it.id == orderId }
+            if (updatedOrder != null) {
+                db.collection("users").document(user.uid).collection("orders").document(orderId)
+                    .update(
+                        mapOf(
+                            "status" to updatedOrder.status.name,
+                            "updatedAt" to FieldValue.serverTimestamp()
+                        )
+                    )
+                    .addOnFailureListener { e -> Log.e(tag, "Failed to update order status in Firestore", e) }
+            }
+        }
     }
 
     fun reorder(order: Order) {
