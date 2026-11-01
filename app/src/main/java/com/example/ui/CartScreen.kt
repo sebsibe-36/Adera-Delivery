@@ -56,6 +56,7 @@ import com.example.R
 import com.example.model.CartItem
 import com.example.ui.components.QuantityController
 import com.example.ui.theme.DarkGrayText
+import com.example.ui.theme.EmeraldGreenDark
 import com.example.ui.theme.EmeraldGreenPrimary
 import com.example.ui.theme.GoldAccent
 import com.example.ui.theme.SoftGreenContainer
@@ -70,6 +71,8 @@ fun CartScreen(
     onClearCart: () -> Unit,
     onProceedToCheckout: () -> Unit,
     onExploreFood: () -> Unit,
+    isLoggedIn: Boolean = false,
+    onSignInClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var promoCode by remember { mutableStateOf("") }
@@ -399,11 +402,66 @@ fun CartScreen(
                 }
             }
 
+            // Sign-In Requirement Prompt when guest
+            if (!isLoggedIn) {
+                item {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 6.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = SoftGreenContainer)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.White),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "G",
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = EmeraldGreenPrimary,
+                                    fontSize = 16.sp
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Google Sign-In Required",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = EmeraldGreenDark
+                                )
+                                Text(
+                                    text = "Sign in to securely place your order and track live delivery status.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             // Checkout Button
             item {
-                Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp)) {
+                Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
                     Button(
-                        onClick = onProceedToCheckout,
+                        onClick = {
+                            if (isLoggedIn) {
+                                onProceedToCheckout()
+                            } else {
+                                onSignInClick?.invoke() ?: onProceedToCheckout()
+                            }
+                        },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(54.dp)
@@ -411,12 +469,38 @@ fun CartScreen(
                         colors = ButtonDefaults.buttonColors(containerColor = EmeraldGreenPrimary),
                         shape = RoundedCornerShape(14.dp)
                     ) {
-                        Text(
-                            text = "Proceed to Checkout • ETB ${"%.0f".format(finalTotal)}",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
+                        if (isLoggedIn) {
+                            Text(
+                                text = "Proceed to Checkout • ETB ${"%.0f".format(finalTotal)}",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        } else {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(22.dp)
+                                        .clip(CircleShape)
+                                        .background(Color.White),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "G",
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = EmeraldGreenPrimary,
+                                        fontSize = 13.sp
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    text = "Sign in with Google to Checkout",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
+                        }
                     }
                 }
             }

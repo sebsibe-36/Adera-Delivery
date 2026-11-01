@@ -146,6 +146,11 @@ class AderaViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun navigateToCheckout() {
+        if (currentUser.value == null) {
+            _showLoginDialog.value = true
+            showToast("Please sign in with Google to proceed to checkout")
+            return
+        }
         if (cartItems.value.isNotEmpty()) {
             _currentScreen.value = NavigationScreen.CHECKOUT
         } else {

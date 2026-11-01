@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.sp
 import com.example.model.CartItem
 import com.example.model.Order
 import com.example.ui.theme.DarkGrayText
+import com.example.ui.theme.EmeraldGreenDark
 import com.example.ui.theme.EmeraldGreenPrimary
 import com.example.ui.theme.GoldAccent
 import com.example.ui.theme.SoftGreenContainer
@@ -68,12 +69,17 @@ fun CheckoutScreen(
     initialLocation: String,
     onBack: () -> Unit,
     onPlaceOrder: (name: String, phone: String, address: String, notes: String, payment: String) -> Unit,
+    currentUser: com.google.firebase.auth.FirebaseUser? = null,
     modifier: Modifier = Modifier
 ) {
     BackHandler { onBack() }
 
-    var customerName by remember { mutableStateOf("Selamawit Tadesse") }
-    var customerPhone by remember { mutableStateOf("+251 91 234 5678") }
+    var customerName by remember(currentUser) {
+        mutableStateOf(currentUser?.displayName?.ifBlank { null } ?: "Selamawit Tadesse")
+    }
+    var customerPhone by remember(currentUser) {
+        mutableStateOf(currentUser?.phoneNumber?.ifBlank { null } ?: "+251 91 234 5678")
+    }
     var deliveryAddress by remember { mutableStateOf(initialLocation) }
     var deliveryNotes by remember { mutableStateOf("Bldg 4, Apt 2B (Ring gate bell)") }
     var selectedPayment by remember { mutableStateOf("Cash on Delivery") }
@@ -149,6 +155,32 @@ fun CheckoutScreen(
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
+                    }
+
+                    if (currentUser != null) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(SoftGreenContainer)
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = "Verified Account",
+                                tint = EmeraldGreenPrimary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Verified Google Account: ${currentUser.email ?: currentUser.displayName ?: "User"}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = EmeraldGreenDark,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(12.dp))

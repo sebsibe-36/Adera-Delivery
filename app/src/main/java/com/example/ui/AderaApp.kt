@@ -98,6 +98,13 @@ fun AderaApp(
         }
     }
 
+    // Safety guard: if logged out while on checkout screen, return to main tabs
+    LaunchedEffect(currentUser, currentScreen) {
+        if (currentUser == null && currentScreen == NavigationScreen.CHECKOUT) {
+            viewModel.navigateBack()
+        }
+    }
+
     // Top-level back handler
     BackHandler(enabled = currentScreen != NavigationScreen.MAIN_TABS || currentTab != ScreenTab.HOME) {
         if (currentScreen != NavigationScreen.MAIN_TABS) {
@@ -285,7 +292,8 @@ fun AderaApp(
                         onBack = { viewModel.navigateBack() },
                         onPlaceOrder = { name, phone, address, notes, payment ->
                             viewModel.placeOrder(name, phone, address, notes, payment)
-                        }
+                        },
+                        currentUser = currentUser
                     )
                 }
 
@@ -338,7 +346,9 @@ fun AderaApp(
                                 },
                                 onClearCart = { viewModel.clearCart() },
                                 onProceedToCheckout = { viewModel.navigateToCheckout() },
-                                onExploreFood = { viewModel.selectTab(ScreenTab.HOME) }
+                                onExploreFood = { viewModel.selectTab(ScreenTab.HOME) },
+                                isLoggedIn = currentUser != null,
+                                onSignInClick = { viewModel.openLoginDialog() }
                             )
                         }
 
